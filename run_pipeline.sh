@@ -24,7 +24,6 @@ usage() {
     echo "  --bowtie2_index  PATH  Bowtie2 host index prefix"
     echo "  --diamond_db     FILE  DIAMOND database (.dmnd)"
     echo "  --genomad_db     DIR   geNomad database path"
-    echo "  --nr_path        FILE  NR protein FASTA path"
     echo ""
     echo "Optional:"
     echo "  --threads        INT   CPU threads (default: 32)"
@@ -53,7 +52,6 @@ while [[ $# -gt 0 ]]; do
         --bowtie2_index)  BOWTIE2_INDEX="$2";  shift 2 ;;
         --diamond_db)     DIAMOND_DB="$2";     shift 2 ;;
         --genomad_db)     GENOMAD_DB="$2";     shift 2 ;;
-        --nr_path)        NR_PATH="$2";        shift 2 ;;
         --threads)        THREADS="$2";        shift 2 ;;
         --min_length)     MIN_LENGTH="$2";     shift 2 ;;
         --help|-h)        usage ;;
@@ -69,7 +67,6 @@ MISSING=""
 [[ -z "$BOWTIE2_INDEX" ]] && MISSING+="  --bowtie2_index\n"
 [[ -z "$DIAMOND_DB"    ]] && MISSING+="  --diamond_db\n"
 [[ -z "$GENOMAD_DB"    ]] && MISSING+="  --genomad_db\n"
-[[ -z "$NR_PATH"       ]] && MISSING+="  --nr_path\n"
 
 if [[ -n "$MISSING" ]]; then
     echo "ERROR: Missing required arguments:"
@@ -103,7 +100,6 @@ bash "${SCRIPT_DIR}/run_phase3.sh" \
     --output_dir  "${OUTPUT_DIR}" \
     --kraken_db   "${KRAKEN_DB}" \
     --diamond_db  "${DIAMOND_DB}" \
-    --nr_path     "${NR_PATH}" \
     --threads     "${THREADS}" \
     --min_length  "${MIN_LENGTH}"
 

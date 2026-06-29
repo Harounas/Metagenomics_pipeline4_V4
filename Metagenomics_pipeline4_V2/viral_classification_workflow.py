@@ -3,15 +3,15 @@
 viral_classification_workflow.py
 
 Workflow starting from assembled per-sample contigs:
-  1. Merge per-sample contigs into one FASTA
-  2. Kraken2 taxonomic classification on merged contigs
-  3. DIAMOND blastx on merged contigs -> identify viral candidates
-  4. Union viral contig IDs (Kraken2 + DIAMOND)
-  5. Extract viral contigs -> viral_contigs_merged.fasta
-  6. CD-HIT-EST clustering
-  7. DIAMOND blastx on clustered representatives
-  8. Annotate with virus names -> diamond_results_contig_with_sampleid.tsv
-  9. Merge cluster info + DIAMOND annotations -> final TSV
+  1.  Merge per-sample contigs into one FASTA
+  2.  Kraken2 taxonomic classification on merged contigs
+  3.  DIAMOND blastx (initial pass) on merged contigs -> viral candidates
+  4.  Union viral contig IDs (Kraken2 + DIAMOND)
+  5.  Extract viral contigs -> viral_contigs_merged.fasta
+  6.  CD-HIT-EST clustering
+  7.  DIAMOND blastx on clustered contigs (with stitle for virus names)
+  8.  Build diamond_results_contig_with_sampleid.tsv from stitle
+  9.  Merge cluster info + DIAMOND annotations -> final TSV
 
 Output TSV columns:
   query_id, clstr, clstr_size, length, clstr_rep, clstr_iden, clstr_cov,
@@ -21,6 +21,7 @@ Output TSV columns:
 import argparse
 import csv
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -47,7 +48,6 @@ def merge_contigs(output_dir: str, merged_fasta: str, min_length: int = 200) -> 
       - {output_dir}/{sample}/contigs.fasta        (per-sample subdirectory)
 
     Renames every sequence to  {sample_id}|{original_contig_id}.
-    Returns the Path of the merged FASTA.
     """
     base_dir = Path(output_dir)
     records = []
@@ -86,13 +86,9 @@ def merge_contigs(output_dir: str, merged_fasta: str, min_length: int = 200) -> 
 
 def run_kraken2_on_contigs(merged_fasta: str, kraken_db: str,
                             output_dir: str, threads: int = 8):
-    """
-    Run Kraken2 in single-end mode on the merged contigs FASTA.
-    Returns (report_path, output_path).
-    """
+    """Run Kraken2 in single-end mode on the merged contigs FASTA."""
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-
     report = out_dir / "merged_contigs_kraken_report.txt"
     kout   = out_dir / "merged_contigs_kraken_output.txt"
 
@@ -114,13 +110,7 @@ def run_kraken2_on_contigs(merged_fasta: str, kraken_db: str,
 # ---------------------------------------------------------------------------
 
 def extract_kraken_viral_ids(kraken_output: str, kraken_report: str) -> set:
-    """
-    Return the set of contig IDs classified as viral by Kraken2.
-
-    Builds a viral taxid set from the report (rows whose rank is in
-    KRAKEN_VIRAL_RANKS and whose name contains a VIRAL_KEYWORD), then
-    collects contig IDs from the per-read output that matched those taxids.
-    """
+    """Return contig IDs classified as viral by Kraken2."""
     viral_taxids: set = set()
     with open(kraken_report, newline="") as fh:
         for row in csv.reader(fh, delimiter="\t"):
@@ -149,15 +139,15 @@ def extract_kraken_viral_ids(kraken_output: str, kraken_report: str) -> set:
 
 
 # ---------------------------------------------------------------------------
-# Step 4 – Initial DIAMOND pass on merged contigs
+# Step 4 – Initial DIAMOND pass (viral candidate detection)
 # ---------------------------------------------------------------------------
 
 def run_diamond_initial(merged_fasta: str, diamond_db: str,
                          output_dir: str, threads: int = 8) -> Path:
     """
-    Run DIAMOND blastx on merged contigs using standard tabular format 6.
-    Since nr_genomad.dmnd is a viral-focused database, all hits are treated
-    as viral candidates; non-viral contigs are filtered in the annotation step.
+    Run DIAMOND blastx (standard outfmt 6, top-1 hit) on merged contigs.
+    All hits are treated as viral candidates; non-viral contigs are
+    filtered out later in the annotation step.
     """
     out_file = Path(output_dir) / "diamond_initial.m8"
     cmd = [
@@ -177,20 +167,14 @@ def run_diamond_initial(merged_fasta: str, diamond_db: str,
 
 
 # ---------------------------------------------------------------------------
-# Step 5 – Extract viral IDs from DIAMOND initial results
+# Step 5 – Extract viral IDs from initial DIAMOND results
 # ---------------------------------------------------------------------------
 
-def extract_diamond_viral_ids(diamond_m8: str,
-                               filter_by_keywords: bool = False) -> set:
-    """
-    Return all query contig IDs that got any DIAMOND hit.
-    Since the DB is viral-focused (nr_genomad.dmnd), all hits are viral
-    candidates. filter_by_keywords is kept for API compatibility but unused.
-    """
+def extract_diamond_viral_ids(diamond_m8: str) -> set:
+    """Return all query contig IDs that got any DIAMOND hit."""
     col_names = [
         "query_id", "subject_id", "pident", "length", "mismatch",
-        "gapopen", "qstart", "qend", "sstart", "send",
-        "evalue", "bitscore",
+        "gapopen", "qstart", "qend", "sstart", "send", "evalue", "bitscore",
     ]
     df = pd.read_csv(diamond_m8, sep="\t", header=None, names=col_names)
     viral_ids = set(df["query_id"].unique())
@@ -204,7 +188,7 @@ def extract_diamond_viral_ids(diamond_m8: str,
 
 def write_viral_contigs(merged_fasta: str, viral_ids: set,
                          output_fasta: str) -> Path:
-    """Extract contigs matching viral_ids from merged_fasta and write to output_fasta."""
+    """Extract contigs matching viral_ids and write to output_fasta."""
     records = [r for r in SeqIO.parse(merged_fasta, "fasta") if r.id in viral_ids]
     out_path = Path(output_fasta)
     SeqIO.write(records, out_path, "fasta")
@@ -213,47 +197,107 @@ def write_viral_contigs(merged_fasta: str, viral_ids: set,
 
 
 # ---------------------------------------------------------------------------
+# Step 7 – Final DIAMOND on clustered contigs (with stitle)
+# ---------------------------------------------------------------------------
+
+def run_diamond_with_stitle(query_fasta: str, diamond_db: str,
+                             output_file: str, threads: int = 8) -> Path:
+    """
+    Run DIAMOND blastx with stitle included in the output.
+    Passes all outfmt fields as a single string (required by DIAMOND).
+    """
+    out_path = Path(output_file)
+    outfmt = "6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore stitle"
+    cmd = [
+        "diamond", "blastx",
+        "--query",   str(query_fasta),
+        "--db",      diamond_db,
+        "--out",     str(out_path),
+        "--threads", str(threads),
+        "--outfmt",  outfmt,
+        "--sensitive",
+        "--evalue",  "1e-5",
+    ]
+    print("Running final DIAMOND (with stitle):", " ".join(cmd))
+    subprocess.run(cmd, check=True)
+    return out_path
+
+
+# ---------------------------------------------------------------------------
+# Step 8 – Build diamond_results_contig_with_sampleid.tsv from stitle
+# ---------------------------------------------------------------------------
+
+def build_diamond_tsv(diamond_m8_with_stitle: str,
+                       output_dir: str) -> Path:
+    """
+    Parse DIAMOND output (with stitle) and produce the annotated TSV
+    expected by process_clustered_contigs.
+
+    Extracts virus name from stitle using bracket pattern [Virus name]
+    or the full stitle when no brackets are present.
+    Selects best hit per query by bitscore.
+    """
+    col_names = [
+        "query_id", "subject_id", "pident", "aln_len", "mismatches", "gaps",
+        "qstart", "qend", "sstart", "send", "evalue", "bitscore", "stitle",
+    ]
+    df = pd.read_csv(diamond_m8_with_stitle, sep="\t", header=None,
+                     names=col_names)
+
+    # Extract virus name from stitle: prefer text inside [...] containing a keyword
+    def parse_virus(stitle: str) -> str:
+        matches = re.findall(r'\[([^\]]+)\]', str(stitle))
+        for m in matches:
+            if any(k in m.lower() for k in VIRAL_KEYWORDS):
+                return m
+        # Fallback: return the full stitle up to first bracket or truncated
+        return str(stitle).split("[")[0].strip() or str(stitle)
+
+    df["virus"] = df["stitle"].apply(parse_virus)
+
+    # Keep best hit per query (highest bitscore)
+    df["bitscore"] = pd.to_numeric(df["bitscore"], errors="coerce")
+    best = df.loc[df.groupby("query_id")["bitscore"].idxmax()].copy()
+
+    # Extract Sample_ID and contig length from query_id
+    best["Sample_ID"] = best["query_id"].str.split("|").str[0]
+    tail = best["query_id"].str.split("|").str[-1]
+    best["contigs_len"] = pd.to_numeric(
+        tail.str.extract(r'length_(\d+)', expand=False), errors="coerce")
+    fallback = pd.to_numeric(tail.str.split("_").str[3], errors="coerce")
+    best["contigs_len"] = best["contigs_len"].fillna(fallback)
+
+    # Compute query coverage
+    best["qstart"]      = pd.to_numeric(best["qstart"],  errors="coerce")
+    best["qend"]        = pd.to_numeric(best["qend"],    errors="coerce")
+    best["aln_len"]     = pd.to_numeric(best["aln_len"], errors="coerce")
+    best["contigs_len"] = pd.to_numeric(best["contigs_len"], errors="coerce")
+    best["qcov"] = ((best["qend"] - best["qstart"] + 1) / best["contigs_len"]) * 100
+
+    out_path = Path(output_dir) / "diamond_results_contig_with_sampleid.tsv"
+    best.to_csv(out_path, sep="\t", index=False)
+    print(f"Diamond TSV written -> {out_path}")
+    return out_path
+
+
+# ---------------------------------------------------------------------------
 # Full workflow orchestrator
 # ---------------------------------------------------------------------------
 
 def run_full_workflow(
-    output_dir:           str,
-    kraken_db:            str,
-    diamond_db:           str,
-    nr_path:              str,
-    threads:              int  = 32,
-    min_length:           int  = 200,
-    skip_existing:        bool = False,
-    filter_by_keywords:   bool = False,
+    output_dir:    str,
+    kraken_db:     str,
+    diamond_db:    str,
+    threads:       int  = 32,
+    min_length:    int  = 200,
+    skip_existing: bool = False,
 ) -> str:
     """
     End-to-end viral classification workflow starting from per-sample contigs.
-
-    Parameters
-    ----------
-    output_dir          Directory containing *_contigs.fasta files (phase 1 output).
-    kraken_db           Kraken2 database path.
-    diamond_db          DIAMOND database (.dmnd) path.
-    nr_path             NR protein FASTA path used for virus-name annotation.
-    threads             CPU threads for all tools.
-    min_length          Minimum contig length (bp) to include.
-    skip_existing       Skip steps whose output files already exist.
-    filter_by_keywords  Filter initial DIAMOND hits by viral keywords in title.
-                        Set True when diamond_db is the full NR; leave False for
-                        viral-focused databases (e.g. nr_genomad.dmnd).
-
-    Returns
-    -------
-    Path to the final TSV file.
+    No NR FASTA required — virus names are extracted directly from DIAMOND stitle.
     """
-    from Metagenomics_pipeline4_V2.extract_contigs_diamond import (
-        cluster_contigs,
-        run_diamond,
-        process_virus_contigs,
-    )
-    from Metagenomics_pipeline4_V2.process_clustered_contigs import (
-        process_clustered_contigs,
-    )
+    from Metagenomics_pipeline4_V2.extract_contigs_diamond import cluster_contigs
+    from Metagenomics_pipeline4_V2.process_clustered_contigs import process_clustered_contigs
 
     out            = Path(output_dir)
     merged_fasta   = out / "merged_contigs.fasta"
@@ -269,7 +313,7 @@ def run_full_workflow(
     if not skip_existing or not merged_fasta.exists():
         merge_contigs(output_dir, str(merged_fasta), min_length)
     else:
-        print(f"[skip] Using existing merged contigs: {merged_fasta}")
+        print(f"[skip] merged_contigs.fasta exists")
 
     # ── 2. Kraken2 on merged contigs ──────────────────────────────────────
     kraken_report = kraken_dir / "merged_contigs_kraken_report.txt"
@@ -278,7 +322,7 @@ def run_full_workflow(
         kraken_report, kraken_output = run_kraken2_on_contigs(
             str(merged_fasta), kraken_db, str(kraken_dir), threads)
     else:
-        print(f"[skip] Using existing Kraken2 output: {kraken_output}")
+        print(f"[skip] Kraken2 output exists")
 
     # ── 3. Extract Kraken2 viral IDs ──────────────────────────────────────
     kraken_viral = extract_kraken_viral_ids(str(kraken_output), str(kraken_report))
@@ -289,11 +333,10 @@ def run_full_workflow(
         initial_m8 = run_diamond_initial(
             str(merged_fasta), diamond_db, str(out), threads)
     else:
-        print(f"[skip] Using existing initial DIAMOND: {initial_m8}")
+        print(f"[skip] diamond_initial.m8 exists")
 
     # ── 5. Extract DIAMOND viral IDs ──────────────────────────────────────
-    diamond_viral = extract_diamond_viral_ids(
-        str(initial_m8), filter_by_keywords=filter_by_keywords)
+    diamond_viral = extract_diamond_viral_ids(str(initial_m8))
 
     # ── 6. Write merged viral contigs ─────────────────────────────────────
     all_viral = kraken_viral | diamond_viral
@@ -313,16 +356,20 @@ def run_full_workflow(
             threads=threads,
         )
     else:
-        print(f"[skip] Using existing clustered contigs: {clust_fasta}")
+        print(f"[skip] clustered_contigs.fasta exists")
 
-    # ── 8. DIAMOND on clustered contigs ───────────────────────────────────
+    # ── 8. Final DIAMOND with stitle ──────────────────────────────────────
     if not skip_existing or not diamond_result.exists():
-        run_diamond(diamond_db, str(clust_fasta), str(diamond_result), threads)
+        run_diamond_with_stitle(
+            str(clust_fasta), diamond_db, str(diamond_result), threads)
     else:
-        print(f"[skip] Using existing clustered DIAMOND: {diamond_result}")
+        print(f"[skip] results_clustered.m8 exists")
 
-    # ── 9. Annotate DIAMOND results with virus names ───────────────────────
-    process_virus_contigs(nr_path, str(diamond_result), output_dir)
+    # ── 9. Build annotated TSV from stitle ────────────────────────────────
+    if not skip_existing or not diamond_tsv.exists():
+        build_diamond_tsv(str(diamond_result), output_dir)
+    else:
+        print(f"[skip] diamond_results_contig_with_sampleid.tsv exists")
 
     # ── 10. Build final TSV ────────────────────────────────────────────────
     final_tsv = process_clustered_contigs(
@@ -342,36 +389,29 @@ def main():
                     "+ DIAMOND -> CD-HIT -> annotated TSV")
 
     parser.add_argument("--output_dir",  required=True,
-                        help="Directory with per-sample *_contigs.fasta "
+                        help="Directory with per-sample *_contigs.fasta files "
                              "(phase 1 output); also used for all workflow outputs")
     parser.add_argument("--kraken_db",   required=True,
                         help="Path to Kraken2 database")
     parser.add_argument("--diamond_db",  required=True,
                         help="Path to DIAMOND database (.dmnd)")
-    parser.add_argument("--nr_path",     required=True,
-                        help="Path to NR protein FASTA for virus-name annotation")
     parser.add_argument("--threads",     type=int, default=32,
                         help="CPU threads (default: 32)")
     parser.add_argument("--min_length",  type=int, default=200,
                         help="Minimum contig length in bp (default: 200)")
     parser.add_argument("--skip_existing", action="store_true",
                         help="Skip steps whose output files already exist")
-    parser.add_argument("--filter_by_keywords", action="store_true",
-                        help="Filter initial DIAMOND hits by viral keywords "
-                             "(use when diamond_db is full NR, not a viral-only DB)")
 
     args = parser.parse_args()
     os.makedirs(args.output_dir, exist_ok=True)
 
     run_full_workflow(
-        output_dir          = args.output_dir,
-        kraken_db           = args.kraken_db,
-        diamond_db          = args.diamond_db,
-        nr_path             = args.nr_path,
-        threads             = args.threads,
-        min_length          = args.min_length,
-        skip_existing       = args.skip_existing,
-        filter_by_keywords  = args.filter_by_keywords,
+        output_dir    = args.output_dir,
+        kraken_db     = args.kraken_db,
+        diamond_db    = args.diamond_db,
+        threads       = args.threads,
+        min_length    = args.min_length,
+        skip_existing = args.skip_existing,
     )
 
 

@@ -19,7 +19,6 @@ usage() {
     echo "  --output_dir   DIR   Directory with *_contigs.fasta files (phase 1 output)"
     echo "  --kraken_db    DIR   Kraken2 database path"
     echo "  --diamond_db   FILE  DIAMOND database (.dmnd)"
-    echo "  --nr_path      FILE  NR protein FASTA path"
     echo ""
     echo "Optional:"
     echo "  --threads      INT   CPU threads (default: 32)"
@@ -30,8 +29,7 @@ usage() {
     echo "  bash run_phase3.sh \\"
     echo "    --output_dir  /data/output \\"
     echo "    --kraken_db   /db/kraken \\"
-    echo "    --diamond_db  /db/nr_genomad.dmnd \\"
-    echo "    --nr_path     /db/nr \\"
+    echo "    --diamond_db  /db/nr.dmnd \\"
     echo "    --threads 32"
     exit 1
 }
@@ -42,7 +40,6 @@ while [[ $# -gt 0 ]]; do
         --output_dir)  OUTPUT_DIR="$2";  shift 2 ;;
         --kraken_db)   KRAKEN_DB="$2";   shift 2 ;;
         --diamond_db)  DIAMOND_DB="$2";  shift 2 ;;
-        --nr_path)     NR_PATH="$2";     shift 2 ;;
         --threads)     THREADS="$2";     shift 2 ;;
         --min_length)  MIN_LENGTH="$2";  shift 2 ;;
         --help|-h)     usage ;;
@@ -55,7 +52,6 @@ MISSING=""
 [[ -z "$OUTPUT_DIR" ]] && MISSING+="  --output_dir\n"
 [[ -z "$KRAKEN_DB"  ]] && MISSING+="  --kraken_db\n"
 [[ -z "$DIAMOND_DB" ]] && MISSING+="  --diamond_db\n"
-[[ -z "$NR_PATH"    ]] && MISSING+="  --nr_path\n"
 
 if [[ -n "$MISSING" ]]; then
     echo "ERROR: Missing required arguments:"
@@ -66,7 +62,6 @@ fi
 [[ ! -d "$OUTPUT_DIR" ]] && { echo "ERROR: --output_dir not found: $OUTPUT_DIR"; exit 1; }
 [[ ! -d "$KRAKEN_DB"  ]] && { echo "ERROR: --kraken_db not found: $KRAKEN_DB";  exit 1; }
 [[ ! -f "$DIAMOND_DB" ]] && { echo "ERROR: --diamond_db not found: $DIAMOND_DB"; exit 1; }
-[[ ! -f "$NR_PATH"    ]] && { echo "ERROR: --nr_path not found: $NR_PATH";       exit 1; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PYTHONPATH="${SCRIPT_DIR}:${PYTHONPATH}"
@@ -77,7 +72,6 @@ echo "Phase 3 started at $(date)"
 echo "Output dir  : ${OUTPUT_DIR}"
 echo "Kraken DB   : ${KRAKEN_DB}"
 echo "DIAMOND DB  : ${DIAMOND_DB}"
-echo "NR path     : ${NR_PATH}"
 echo "Threads     : ${THREADS}"
 echo "Min length  : ${MIN_LENGTH} bp"
 echo "=========================================="
@@ -86,7 +80,6 @@ python "${SCRIPT_DIR}/Metagenomics_pipeline4_V2/viral_classification_workflow.py
     --output_dir     "${OUTPUT_DIR}" \
     --kraken_db      "${KRAKEN_DB}" \
     --diamond_db     "${DIAMOND_DB}" \
-    --nr_path        "${NR_PATH}" \
     --threads        "${THREADS}" \
     --min_length     "${MIN_LENGTH}" \
     --skip_existing \

@@ -12,6 +12,7 @@ set -eo pipefail
 # ── defaults ─────────────────────────────────────────────────────────────────
 THREADS=32
 MIN_LENGTH=200
+SKIP_EXISTING=false
 
 usage() {
     echo ""
@@ -28,6 +29,7 @@ usage() {
     echo "Optional:"
     echo "  --threads        INT   CPU threads (default: 32)"
     echo "  --min_length     INT   Minimum contig length in bp (default: 200)"
+    echo "  --skip_existing        Skip steps whose output already exists"
     echo "  --help                 Show this help"
     echo ""
     echo "Example:"
@@ -36,10 +38,9 @@ usage() {
     echo "    --output_dir    /data/output \\"
     echo "    --kraken_db     /db/kraken \\"
     echo "    --bowtie2_index /db/GR38_bt2 \\"
-    echo "    --diamond_db    /db/nr_genomad.dmnd \\"
+    echo "    --diamond_db    /db/nr.dmnd \\"
     echo "    --genomad_db    /db/genomad_db \\"
-    echo "    --nr_path       /db/nr \\"
-    echo "    --threads 32"
+    echo "    --threads 32 --skip_existing"
     exit 1
 }
 
@@ -54,6 +55,7 @@ while [[ $# -gt 0 ]]; do
         --genomad_db)     GENOMAD_DB="$2";     shift 2 ;;
         --threads)        THREADS="$2";        shift 2 ;;
         --min_length)     MIN_LENGTH="$2";     shift 2 ;;
+        --skip_existing)  SKIP_EXISTING=true;  shift ;;
         --help|-h)        usage ;;
         *) echo "Unknown argument: $1"; usage ;;
     esac
@@ -75,9 +77,12 @@ if [[ -n "$MISSING" ]]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SKIP_FLAG=""
+[[ "${SKIP_EXISTING}" == "true" ]] && SKIP_FLAG="--skip_existing"
 
 echo "=========================================="
 echo "Full pipeline started at $(date)"
+echo "Skip existing: ${SKIP_EXISTING}"
 echo "=========================================="
 
 bash "${SCRIPT_DIR}/run_phase1.sh" \
@@ -102,7 +107,8 @@ bash "${SCRIPT_DIR}/run_phase3.sh" \
     --diamond_db  "${DIAMOND_DB}" \
     --genomad_db  "${GENOMAD_DB}" \
     --threads     "${THREADS}" \
-    --min_length  "${MIN_LENGTH}"
+    --min_length  "${MIN_LENGTH}" \
+    ${SKIP_FLAG}
 
 echo ""
 echo "=========================================="

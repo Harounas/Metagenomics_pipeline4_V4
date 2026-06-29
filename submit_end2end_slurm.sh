@@ -1,0 +1,52 @@
+#!/bin/bash
+#SBATCH --job-name=metagenomics_e2e
+#SBATCH --output=/mnt/hpc_acegid/nfsscratch/soumareh/kraken_summary_files/Contigs/logs/e2e_%j.out
+#SBATCH --error=/mnt/hpc_acegid/nfsscratch/soumareh/kraken_summary_files/Contigs/logs/e2e_%j.err
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=32
+#SBATCH --mem=200G
+#SBATCH --time=96:00:00
+#SBATCH --partition=normal
+
+set -eo pipefail
+
+# ── paths ─────────────────────────────────────────────────────────────────────
+FASTQ_DIR=/mnt/hpc_acegid/nfsscratch/soumareh/raw_fastq          # <-- update this
+OUTPUT_DIR=/mnt/hpc_acegid/nfsscratch/soumareh/kraken_summary_files/Contigs
+KRAKEN_DB=/mnt/hpc_acegid/nfsscratch/DATABASE/Kraken
+BOWTIE2_INDEX=/mnt/hpc_acegid/nfsscratch/DATABASE/bowtie2/hg38   # <-- update this
+DIAMOND_DB=/mnt/hpc_acegid/nfsscratch/DATABASE/diamond/nr.dmnd
+GENOMAD_DB=/mnt/hpc_acegid/home/soumareh/haouruna/genomad_db
+SCRIPT_DIR=/mnt/hpc_acegid/home/soumareh/Metagenomics_pipeline4_V4
+
+THREADS=32
+MIN_LENGTH=200
+GENOMAD_MIN_LENGTH=2000
+SPLITS=16
+
+# ── environment ───────────────────────────────────────────────────────────────
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate genomad
+
+export PYTHONPATH="${SCRIPT_DIR}:${PYTHONPATH}"
+mkdir -p "${OUTPUT_DIR}/logs"
+
+echo "Job ID      : ${SLURM_JOB_ID}"
+echo "Node        : $(hostname)"
+echo "Started at  : $(date)"
+echo "FASTQ dir   : ${FASTQ_DIR}"
+echo "Output dir  : ${OUTPUT_DIR}"
+
+bash "${SCRIPT_DIR}/run_pipeline.sh" \
+    --fastq_dir      "${FASTQ_DIR}" \
+    --output_dir     "${OUTPUT_DIR}" \
+    --kraken_db      "${KRAKEN_DB}" \
+    --bowtie2_index  "${BOWTIE2_INDEX}" \
+    --diamond_db     "${DIAMOND_DB}" \
+    --genomad_db     "${GENOMAD_DB}" \
+    --threads        "${THREADS}" \
+    --min_length     "${MIN_LENGTH}" \
+    --skip_existing
+
+echo ""
+echo "Pipeline finished at $(date)"

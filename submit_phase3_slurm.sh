@@ -16,8 +16,8 @@ KRAKEN_DB=/mnt/hpc_acegid/nfsscratch/DATABASE/Kraken
 DIAMOND_DB=/mnt/hpc_acegid/nfsscratch/DATABASE/diamond/nr.dmnd
 GENOMAD_DB=/mnt/hpc_acegid/home/soumareh/haouruna/genomad_db
 THREADS=32
-SPLITS=8
-GENOMAD_MIN_LENGTH=500
+SPLITS=16
+GENOMAD_MIN_LENGTH=2000
 
 SCRIPT_DIR=/mnt/hpc_acegid/home/soumareh/Metagenomics_pipeline4_V4
 

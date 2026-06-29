@@ -242,18 +242,18 @@ def run_diamond_with_stitle(query_fasta: str, diamond_db: str,
     """
     Run DIAMOND blastx with stitle in the output so virus names can be
     extracted without scanning an NR FASTA file.
-    All outfmt fields are passed as a single string (required by DIAMOND).
+    outfmt fields are passed as separate list items (required by subprocess).
     """
     out_path = Path(output_file)
-    outfmt = ("6 qseqid sseqid pident length mismatch gapopen "
-              "qstart qend sstart send evalue bitscore stitle")
     cmd = [
         "diamond", "blastx",
         "--query",   str(query_fasta),
         "--db",      diamond_db,
         "--out",     str(out_path),
         "--threads", str(threads),
-        "--outfmt",  outfmt,
+        "--outfmt",  "6",
+        "qseqid", "sseqid", "pident", "length", "mismatch", "gapopen",
+        "qstart", "qend", "sstart", "send", "evalue", "bitscore", "stitle",
         "--sensitive",
         "--evalue",  "1e-5",
     ]

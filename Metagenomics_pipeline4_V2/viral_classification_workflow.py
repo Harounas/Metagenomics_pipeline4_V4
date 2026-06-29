@@ -394,14 +394,16 @@ def run_full_workflow(
         print(f"[skip] clustered_contigs.fasta exists")
 
     # ── 6. Final DIAMOND on clustered contigs ─────────────────────────────
-    if not skip_existing or not diamond_result.exists():
+    diamond_done = diamond_result.exists() and diamond_result.stat().st_size > 0
+    if not skip_existing or not diamond_done:
         run_diamond_with_stitle(
             str(clust_fasta), diamond_db, str(diamond_result), threads)
     else:
-        print(f"[skip] results_clustered.m8 exists")
+        print(f"[skip] results_clustered.m8 exists ({diamond_result.stat().st_size} bytes)")
 
     # ── 7. Build annotated TSV from stitle ────────────────────────────────
-    if not skip_existing or not diamond_tsv.exists():
+    diamond_tsv_done = diamond_tsv.exists() and diamond_tsv.stat().st_size > 0
+    if not skip_existing or not diamond_tsv_done:
         build_diamond_tsv(str(diamond_result), output_dir)
     else:
         print(f"[skip] diamond_results_contig_with_sampleid.tsv exists")

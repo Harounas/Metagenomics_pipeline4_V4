@@ -100,6 +100,7 @@ bash "${SCRIPT_DIR}/run_phase3.sh" \
     --output_dir  "${OUTPUT_DIR}" \
     --kraken_db   "${KRAKEN_DB}" \
     --diamond_db  "${DIAMOND_DB}" \
+    --genomad_db  "${GENOMAD_DB}" \
     --threads     "${THREADS}" \
     --min_length  "${MIN_LENGTH}"
 

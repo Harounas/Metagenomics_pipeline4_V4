@@ -1,15 +1,17 @@
 #!/bin/bash
-# Phase 3: Kraken2 + DIAMOND on merged contigs -> CD-HIT cluster -> final viral TSV
+# Phase 3: Kraken2 + geNomad -> merge viral contigs -> CD-HIT -> DIAMOND -> TSV
 #
 # Usage:
 #   bash run_phase3.sh --output_dir <path> --kraken_db <path> \
-#                      --diamond_db <path> --nr_path <path> [--threads 32] [--min_length 200]
+#                      --diamond_db <path> --genomad_db <path> \
+#                      [--threads 32] [--min_length 200] [--min_score 0.5]
 
 set -eo pipefail
 
 # ── defaults ─────────────────────────────────────────────────────────────────
 THREADS=32
 MIN_LENGTH=200
+MIN_SCORE=0.5
 
 usage() {
     echo ""
@@ -19,10 +21,12 @@ usage() {
     echo "  --output_dir   DIR   Directory with *_contigs.fasta files (phase 1 output)"
     echo "  --kraken_db    DIR   Kraken2 database path"
     echo "  --diamond_db   FILE  DIAMOND database (.dmnd)"
+    echo "  --genomad_db   DIR   geNomad database path"
     echo ""
     echo "Optional:"
     echo "  --threads      INT   CPU threads (default: 32)"
     echo "  --min_length   INT   Minimum contig length in bp (default: 200)"
+    echo "  --min_score    FLOAT geNomad minimum virus score (default: 0.5)"
     echo "  --help               Show this help"
     echo ""
     echo "Example:"
@@ -30,6 +34,7 @@ usage() {
     echo "    --output_dir  /data/output \\"
     echo "    --kraken_db   /db/kraken \\"
     echo "    --diamond_db  /db/nr.dmnd \\"
+    echo "    --genomad_db  /db/genomad_db \\"
     echo "    --threads 32"
     exit 1
 }
@@ -40,8 +45,10 @@ while [[ $# -gt 0 ]]; do
         --output_dir)  OUTPUT_DIR="$2";  shift 2 ;;
         --kraken_db)   KRAKEN_DB="$2";   shift 2 ;;
         --diamond_db)  DIAMOND_DB="$2";  shift 2 ;;
+        --genomad_db)  GENOMAD_DB="$2";  shift 2 ;;
         --threads)     THREADS="$2";     shift 2 ;;
         --min_length)  MIN_LENGTH="$2";  shift 2 ;;
+        --min_score)   MIN_SCORE="$2";   shift 2 ;;
         --help|-h)     usage ;;
         *) echo "Unknown argument: $1"; usage ;;
     esac
@@ -52,6 +59,7 @@ MISSING=""
 [[ -z "$OUTPUT_DIR" ]] && MISSING+="  --output_dir\n"
 [[ -z "$KRAKEN_DB"  ]] && MISSING+="  --kraken_db\n"
 [[ -z "$DIAMOND_DB" ]] && MISSING+="  --diamond_db\n"
+[[ -z "$GENOMAD_DB" ]] && MISSING+="  --genomad_db\n"
 
 if [[ -n "$MISSING" ]]; then
     echo "ERROR: Missing required arguments:"
@@ -60,8 +68,9 @@ if [[ -n "$MISSING" ]]; then
 fi
 
 [[ ! -d "$OUTPUT_DIR" ]] && { echo "ERROR: --output_dir not found: $OUTPUT_DIR"; exit 1; }
-[[ ! -d "$KRAKEN_DB"  ]] && { echo "ERROR: --kraken_db not found: $KRAKEN_DB";  exit 1; }
+[[ ! -d "$KRAKEN_DB"  ]] && { echo "ERROR: --kraken_db not found: $KRAKEN_DB";   exit 1; }
 [[ ! -f "$DIAMOND_DB" ]] && { echo "ERROR: --diamond_db not found: $DIAMOND_DB"; exit 1; }
+[[ ! -d "$GENOMAD_DB" ]] && { echo "ERROR: --genomad_db not found: $GENOMAD_DB"; exit 1; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PYTHONPATH="${SCRIPT_DIR}:${PYTHONPATH}"
@@ -72,16 +81,20 @@ echo "Phase 3 started at $(date)"
 echo "Output dir  : ${OUTPUT_DIR}"
 echo "Kraken DB   : ${KRAKEN_DB}"
 echo "DIAMOND DB  : ${DIAMOND_DB}"
+echo "geNomad DB  : ${GENOMAD_DB}"
 echo "Threads     : ${THREADS}"
 echo "Min length  : ${MIN_LENGTH} bp"
+echo "Min score   : ${MIN_SCORE}"
 echo "=========================================="
 
 python "${SCRIPT_DIR}/Metagenomics_pipeline4_V2/viral_classification_workflow.py" \
     --output_dir     "${OUTPUT_DIR}" \
     --kraken_db      "${KRAKEN_DB}" \
     --diamond_db     "${DIAMOND_DB}" \
+    --genomad_db     "${GENOMAD_DB}" \
     --threads        "${THREADS}" \
     --min_length     "${MIN_LENGTH}" \
+    --min_score      "${MIN_SCORE}" \
     --skip_existing \
     2>&1 | tee "${OUTPUT_DIR}/logs/phase3.log"
 

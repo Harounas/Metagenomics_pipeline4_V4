@@ -155,26 +155,21 @@ def extract_kraken_viral_ids(kraken_output: str, kraken_report: str) -> set:
 def run_diamond_initial(merged_fasta: str, diamond_db: str,
                          output_dir: str, threads: int = 8) -> Path:
     """
-    Run DIAMOND blastx on merged contigs.
-
-    Output includes 'stitle' (subject title) so viral hits can be identified
-    by keyword without rescanning the NR FASTA at this stage.
-    Uses --sensitive and top-1 hit per query for speed.
+    Run DIAMOND blastx on merged contigs using standard tabular format 6.
+    Since nr_genomad.dmnd is a viral-focused database, all hits are treated
+    as viral candidates; non-viral contigs are filtered in the annotation step.
     """
     out_file = Path(output_dir) / "diamond_initial.m8"
     cmd = [
         "diamond", "blastx",
-        "--query",  str(merged_fasta),
-        "--db",     diamond_db,
-        "--out",    str(out_file),
-        "--threads", str(threads),
-        "--outfmt", "6",
-        "qseqid", "sseqid", "pident", "length", "mismatch",
-        "gapopen", "qstart", "qend", "sstart", "send",
-        "evalue", "bitscore", "stitle",
+        "--query",           str(merged_fasta),
+        "--db",              diamond_db,
+        "--out",             str(out_file),
+        "--threads",         str(threads),
+        "--outfmt",          "6",
         "--sensitive",
         "--max-target-seqs", "1",
-        "--evalue", "1e-5",
+        "--evalue",          "1e-5",
     ]
     print("Running initial DIAMOND:", " ".join(cmd))
     subprocess.run(cmd, check=True)
@@ -188,27 +183,17 @@ def run_diamond_initial(merged_fasta: str, diamond_db: str,
 def extract_diamond_viral_ids(diamond_m8: str,
                                filter_by_keywords: bool = False) -> set:
     """
-    Return contig IDs from the initial DIAMOND output.
-
-    When filter_by_keywords=True (mixed NR database), only IDs whose subject
-    title contains a viral keyword are returned.  When False (default, for
-    viral-focused databases such as nr_genomad.dmnd), all hits are treated as
-    viral candidates — false positives are removed later by the annotation step.
+    Return all query contig IDs that got any DIAMOND hit.
+    Since the DB is viral-focused (nr_genomad.dmnd), all hits are viral
+    candidates. filter_by_keywords is kept for API compatibility but unused.
     """
     col_names = [
         "query_id", "subject_id", "pident", "length", "mismatch",
         "gapopen", "qstart", "qend", "sstart", "send",
-        "evalue", "bitscore", "stitle",
+        "evalue", "bitscore",
     ]
     df = pd.read_csv(diamond_m8, sep="\t", header=None, names=col_names)
-
-    if filter_by_keywords:
-        mask = df["stitle"].str.lower().str.contains(
-            "|".join(VIRAL_KEYWORDS), na=False)
-        viral_ids = set(df.loc[mask, "query_id"].unique())
-    else:
-        viral_ids = set(df["query_id"].unique())
-
+    viral_ids = set(df["query_id"].unique())
     print(f"DIAMOND viral contig IDs: {len(viral_ids)}")
     return viral_ids
 

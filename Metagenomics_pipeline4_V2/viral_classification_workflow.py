@@ -21,6 +21,7 @@ import argparse
 import csv
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -152,8 +153,15 @@ def run_genomad_on_contigs(merged_fasta: str, genomad_db: str,
     summary_dir = out_dir / f"{fasta_stem}_summary"
     virus_fasta = summary_dir / f"{fasta_stem}_virus.fna"
 
+    genomad_bin = shutil.which("genomad")
+    if genomad_bin is None:
+        raise FileNotFoundError(
+            "genomad executable not found in PATH.\n"
+            "Make sure the genomad conda environment is activated:\n"
+            "  eval \"$(mamba shell hook --shell bash)\" && mamba activate genomad")
+
     cmd = [
-        "genomad", "end-to-end",
+        genomad_bin, "end-to-end",
         str(merged_fasta),
         str(out_dir),
         genomad_db,

@@ -141,19 +141,15 @@ def extract_kraken_viral_ids(kraken_output: str, kraken_report: str) -> set:
 def run_genomad_on_contigs(merged_fasta: str, genomad_db: str,
                             output_dir: str, threads: int = 8,
                             min_score: float = 0.5,
-                            splits: int = 8) -> Path:
+                            splits: int = 8,
+                            genomad_min_length: int = 1000) -> Path:
     """
     Run geNomad end-to-end on merged contigs.
+
+    Pre-filters contigs to genomad_min_length before running to reduce
+    MMseqs2 memory. geNomad recommends >=1000 bp (2500 bp for best accuracy).
     Returns path to the viral contigs FASTA produced by geNomad.
-    The output directory name is derived from the input FASTA stem.
     """
-    out_dir   = Path(output_dir) / "genomad_out"
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    fasta_stem = Path(merged_fasta).stem          # e.g. "merged_contigs"
-    summary_dir = out_dir / f"{fasta_stem}_summary"
-    virus_fasta = summary_dir / f"{fasta_stem}_virus.fna"
-
     genomad_bin = shutil.which("genomad")
     if genomad_bin is None:
         raise FileNotFoundError(
@@ -161,9 +157,27 @@ def run_genomad_on_contigs(merged_fasta: str, genomad_db: str,
             "Make sure the genomad conda environment is activated:\n"
             "  eval \"$(mamba shell hook --shell bash)\" && mamba activate genomad")
 
+    out_dir = Path(output_dir) / "genomad_out"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Pre-filter to genomad_min_length to reduce protein count for MMseqs2
+    filtered_fasta = out_dir / "contigs_for_genomad.fasta"
+    if not filtered_fasta.exists():
+        records = [r for r in SeqIO.parse(merged_fasta, "fasta")
+                   if len(r.seq) >= genomad_min_length]
+        SeqIO.write(records, filtered_fasta, "fasta")
+        print(f"Filtered {len(records)} contigs (>={genomad_min_length} bp) "
+              f"for geNomad -> {filtered_fasta}")
+    else:
+        print(f"[skip] contigs_for_genomad.fasta exists")
+
+    fasta_stem  = filtered_fasta.stem           # "contigs_for_genomad"
+    summary_dir = out_dir / f"{fasta_stem}_summary"
+    virus_fasta = summary_dir / f"{fasta_stem}_virus.fna"
+
     cmd = [
         genomad_bin, "end-to-end",
-        str(merged_fasta),
+        str(filtered_fasta),
         str(out_dir),
         genomad_db,
         "--min-score", str(min_score),
@@ -310,8 +324,9 @@ def run_full_workflow(
     threads:       int   = 32,
     min_length:    int   = 200,
     min_score:     float = 0.5,
-    splits:        int   = 8,
-    skip_existing: bool  = False,
+    splits:              int   = 8,
+    genomad_min_length:  int   = 1000,
+    skip_existing:       bool  = False,
 ) -> str:
     """
     End-to-end workflow:
@@ -351,7 +366,8 @@ def run_full_workflow(
     genomad_virus_fasta = out / "genomad_out" / "merged_contigs_summary" / "merged_contigs_virus.fna"
     if not skip_existing or not genomad_virus_fasta.exists():
         genomad_virus_fasta = run_genomad_on_contigs(
-            str(merged_fasta), genomad_db, str(out), threads, min_score, splits)
+            str(merged_fasta), genomad_db, str(out), threads,
+            min_score, splits, genomad_min_length)
     else:
         print(f"[skip] geNomad viral FASTA exists")
 
@@ -419,8 +435,10 @@ def main():
                         help="Minimum contig length in bp (default: 200)")
     parser.add_argument("--min_score",   type=float, default=0.5,
                         help="geNomad minimum virus score (default: 0.5)")
-    parser.add_argument("--splits",      type=int,   default=8,
+    parser.add_argument("--splits",             type=int, default=8,
                         help="geNomad MMseqs2 splits to reduce memory usage (default: 8)")
+    parser.add_argument("--genomad_min_length", type=int, default=1000,
+                        help="Min contig length (bp) fed to geNomad (default: 1000)")
     parser.add_argument("--skip_existing", action="store_true",
                         help="Skip steps whose output files already exist")
 
@@ -435,8 +453,9 @@ def main():
         threads       = args.threads,
         min_length    = args.min_length,
         min_score     = args.min_score,
-        splits        = args.splits,
-        skip_existing = args.skip_existing,
+        splits              = args.splits,
+        genomad_min_length  = args.genomad_min_length,
+        skip_existing       = args.skip_existing,
     )
 
 

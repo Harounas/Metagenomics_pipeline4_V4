@@ -137,6 +137,16 @@ def process_clustered_contigs(clstr_file, diamond_tsv, output_dir):
     if 'virus' in filtered.columns:
         filtered = filtered[filtered['virus'].astype(str).str.contains("virus", case=False, na=False)]
 
+    # Enforce output column order
+    desired_cols = [
+        'query_id', 'clstr', 'clstr_size', 'length', 'clstr_rep',
+        'clstr_iden', 'clstr_cov', 'Sample_ID', 'contigs_len',
+        'virus', 'evalue', 'bitscore', 'pident', 'qcov',
+    ]
+    present = [c for c in desired_cols if c in filtered.columns]
+    extra   = [c for c in filtered.columns if c not in desired_cols]
+    filtered = filtered[present + extra]
+
     # Save
     output_file = os.path.join(output_dir, "filtered_clusters_assigned_rep_virus.tsv")
     filtered.to_csv(output_file, sep="\t", index=False)

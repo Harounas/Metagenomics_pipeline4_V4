@@ -48,8 +48,9 @@ while [[ $# -gt 0 ]]; do
         --genomad_db)  GENOMAD_DB="$2";  shift 2 ;;
         --threads)     THREADS="$2";     shift 2 ;;
         --min_length)  MIN_LENGTH="$2";  shift 2 ;;
-        --min_score)   MIN_SCORE="$2";   shift 2 ;;
-        --help|-h)     usage ;;
+        --min_score)      MIN_SCORE="$2";      shift 2 ;;
+        --skip_existing)  SKIP_EXISTING=true;  shift ;;
+        --help|-h)        usage ;;
         *) echo "Unknown argument: $1"; usage ;;
     esac
 done
@@ -87,6 +88,9 @@ echo "Min length  : ${MIN_LENGTH} bp"
 echo "Min score   : ${MIN_SCORE}"
 echo "=========================================="
 
+SKIP_FLAG=""
+[[ "${SKIP_EXISTING}" == "true" ]] && SKIP_FLAG="--skip_existing"
+
 python "${SCRIPT_DIR}/Metagenomics_pipeline4_V2/viral_classification_workflow.py" \
     --output_dir     "${OUTPUT_DIR}" \
     --kraken_db      "${KRAKEN_DB}" \
@@ -95,7 +99,7 @@ python "${SCRIPT_DIR}/Metagenomics_pipeline4_V2/viral_classification_workflow.py
     --threads        "${THREADS}" \
     --min_length     "${MIN_LENGTH}" \
     --min_score      "${MIN_SCORE}" \
-    --skip_existing \
+    ${SKIP_FLAG} \
     2>&1 | tee "${OUTPUT_DIR}/logs/phase3.log"
 
 FINAL_TSV="${OUTPUT_DIR}/filtered_clusters_assigned_rep_virus.tsv"

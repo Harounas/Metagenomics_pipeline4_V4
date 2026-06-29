@@ -140,7 +140,8 @@ def extract_kraken_viral_ids(kraken_output: str, kraken_report: str) -> set:
 
 def run_genomad_on_contigs(merged_fasta: str, genomad_db: str,
                             output_dir: str, threads: int = 8,
-                            min_score: float = 0.5) -> Path:
+                            min_score: float = 0.5,
+                            splits: int = 8) -> Path:
     """
     Run geNomad end-to-end on merged contigs.
     Returns path to the viral contigs FASTA produced by geNomad.
@@ -167,6 +168,7 @@ def run_genomad_on_contigs(merged_fasta: str, genomad_db: str,
         genomad_db,
         "--min-score", str(min_score),
         "--threads",   str(threads),
+        "--splits",    str(splits),
         "--restart",
     ]
     print("Running geNomad:", " ".join(cmd))
@@ -308,6 +310,7 @@ def run_full_workflow(
     threads:       int   = 32,
     min_length:    int   = 200,
     min_score:     float = 0.5,
+    splits:        int   = 8,
     skip_existing: bool  = False,
 ) -> str:
     """
@@ -348,7 +351,7 @@ def run_full_workflow(
     genomad_virus_fasta = out / "genomad_out" / "merged_contigs_summary" / "merged_contigs_virus.fna"
     if not skip_existing or not genomad_virus_fasta.exists():
         genomad_virus_fasta = run_genomad_on_contigs(
-            str(merged_fasta), genomad_db, str(out), threads, min_score)
+            str(merged_fasta), genomad_db, str(out), threads, min_score, splits)
     else:
         print(f"[skip] geNomad viral FASTA exists")
 
@@ -416,6 +419,8 @@ def main():
                         help="Minimum contig length in bp (default: 200)")
     parser.add_argument("--min_score",   type=float, default=0.5,
                         help="geNomad minimum virus score (default: 0.5)")
+    parser.add_argument("--splits",      type=int,   default=8,
+                        help="geNomad MMseqs2 splits to reduce memory usage (default: 8)")
     parser.add_argument("--skip_existing", action="store_true",
                         help="Skip steps whose output files already exist")
 
@@ -430,6 +435,7 @@ def main():
         threads       = args.threads,
         min_length    = args.min_length,
         min_score     = args.min_score,
+        splits        = args.splits,
         skip_existing = args.skip_existing,
     )
 

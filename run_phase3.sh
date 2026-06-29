@@ -12,6 +12,7 @@ set -eo pipefail
 THREADS=32
 MIN_LENGTH=200
 MIN_SCORE=0.5
+SPLITS=8
 
 usage() {
     echo ""
@@ -27,6 +28,7 @@ usage() {
     echo "  --threads      INT   CPU threads (default: 32)"
     echo "  --min_length   INT   Minimum contig length in bp (default: 200)"
     echo "  --min_score    FLOAT geNomad minimum virus score (default: 0.5)"
+    echo "  --splits       INT   geNomad MMseqs2 splits to reduce memory (default: 8)"
     echo "  --help               Show this help"
     echo ""
     echo "Example:"
@@ -49,6 +51,7 @@ while [[ $# -gt 0 ]]; do
         --threads)     THREADS="$2";     shift 2 ;;
         --min_length)  MIN_LENGTH="$2";  shift 2 ;;
         --min_score)      MIN_SCORE="$2";      shift 2 ;;
+        --splits)         SPLITS="$2";         shift 2 ;;
         --skip_existing)  SKIP_EXISTING=true;  shift ;;
         --help|-h)        usage ;;
         *) echo "Unknown argument: $1"; usage ;;
@@ -99,6 +102,7 @@ python "${SCRIPT_DIR}/Metagenomics_pipeline4_V2/viral_classification_workflow.py
     --threads        "${THREADS}" \
     --min_length     "${MIN_LENGTH}" \
     --min_score      "${MIN_SCORE}" \
+    --splits         "${SPLITS}" \
     ${SKIP_FLAG} \
     2>&1 | tee "${OUTPUT_DIR}/logs/phase3.log"
 

@@ -23,7 +23,10 @@ echo "Phase 3 started at $(date)"
 echo "Output dir: ${OUTPUT_DIR}"
 echo "=========================================="
 
-run_viral_classification \
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export PYTHONPATH="${SCRIPT_DIR}:${PYTHONPATH}"
+
+python "${SCRIPT_DIR}/Metagenomics_pipeline4_V2/viral_classification_workflow.py" \
     --output_dir     "${OUTPUT_DIR}" \
     --kraken_db      "${KRAKEN_DB}" \
     --diamond_db     "${DIAMOND_DB}" \

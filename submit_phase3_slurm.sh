@@ -19,7 +19,7 @@ THREADS=32
 SPLITS=8
 GENOMAD_MIN_LENGTH=500
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR=/mnt/hpc_acegid/home/soumareh/Metagenomics_pipeline4_V4
 
 # ── environment ───────────────────────────────────────────────────────────────
 source "$(conda info --base)/etc/profile.d/conda.sh"

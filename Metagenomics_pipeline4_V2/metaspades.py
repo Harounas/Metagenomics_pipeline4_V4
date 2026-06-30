@@ -16,7 +16,7 @@ def run_spades(forward, reverse, base_name, output_dir, threads=8):
     Returns:
     - str: Path to the assembled contigs file.
     """
-    sample_outdir = output_dir
+    sample_outdir = os.path.join(output_dir, base_name)
     contigs_output = os.path.join(sample_outdir, "contigs.fasta")
 
     if os.path.exists(contigs_output):

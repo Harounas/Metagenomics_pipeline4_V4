@@ -93,8 +93,6 @@ for SAMPLE in "${SAMPLES[@]}"; do
     echo "------------------------------------------"
 
     SAMPLE_INPUT=$(mktemp -d)
-    SAMPLE_OUT="${OUTPUT_DIR}/${SAMPLE}"
-    mkdir -p "${SAMPLE_OUT}"
 
     for R1 in "${FASTQ_DIR}/${SAMPLE}"*_R1*.fastq.gz; do
         [[ -e "$R1" ]] && ln -sf "$R1" "${SAMPLE_INPUT}/"
@@ -105,7 +103,7 @@ for SAMPLE in "${SAMPLES[@]}"; do
 
     run_metagenomics_pl2 \
         --input_dir              "${SAMPLE_INPUT}" \
-        --output_dir             "${SAMPLE_OUT}" \
+        --output_dir             "${OUTPUT_DIR}" \
         --no_metadata \
         --threads                "${THREADS}" \
         --kraken_db              "${KRAKEN_DB}" \

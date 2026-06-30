@@ -55,7 +55,7 @@ def process_sample(forward, reverse, base_name, bowtie2_index, kraken_db, output
 
         # --- Preprocessing / Assembly logic --- #
         if skip_preprocessing:
-            contigs_file = os.path.join(output_dir, "contigs.fasta")
+            contigs_file = os.path.join(output_dir, base_name, "contigs.fasta")
             if not (skip_existing and os.path.exists(contigs_file)):
                 logging.info(f"[{base_name}] Running SPAdes (skip_preprocessing)")
                 if assembly_semaphore:
@@ -83,7 +83,7 @@ def process_sample(forward, reverse, base_name, bowtie2_index, kraken_db, output
                 unmapped_r1, unmapped_r2 = bowtie_unmapped_r1, bowtie_unmapped_r2
 
             if use_assembly:
-                contigs_file = os.path.join(output_dir, "contigs.fasta")
+                contigs_file = os.path.join(output_dir, base_name, "contigs.fasta")
                 if not (skip_existing and os.path.exists(contigs_file)):
                     logging.info(f"[{base_name}] Running SPAdes")
                     if assembly_semaphore:

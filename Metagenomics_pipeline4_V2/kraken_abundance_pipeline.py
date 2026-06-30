@@ -245,7 +245,8 @@ def aggregate_kraken_results(kraken_dir, metadata_file=None, sample_id_df=None,
                     perc, cov, direct, rc, taxid, sci = f[:6]
                     direct = int(direct)
                     if direct >= read_count and direct <= max_read_count and rc == "S":
-                        row_meta = meta.loc[meta[sid_col] == sample].iloc[0].to_dict()
+                        match = meta.loc[meta[sid_col] == sample]
+                        row_meta = match.iloc[0].to_dict() if not match.empty else {sid_col: sample}
                         results[f"{sample}_{taxid}"] = {
                             "Sample": sample, "TaxID": taxid, "Scientific_Name": sci,
                             "Perc": perc, "Reads": cov, "Direct": direct, **row_meta

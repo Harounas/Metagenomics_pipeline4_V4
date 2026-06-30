@@ -110,7 +110,6 @@ for SAMPLE in "${SAMPLES[@]}"; do
         --threads                "${THREADS}" \
         --kraken_db              "${KRAKEN_DB}" \
         --bowtie2_index          "${BOWTIE2_INDEX}" \
-        --use_precomputed_reports \
         --use_assembly \
         --skip_existing \
         --skip_reports \

@@ -17,6 +17,7 @@ KRAKEN_DB=/mnt/hpc_acegid/nfsscratch/DATABASE/Kraken
 BOWTIE2_INDEX=/mnt/hpc_acegid/nfsscratch/DATABASE/bowtie2/hg38   # <-- update this
 DIAMOND_DB=/mnt/hpc_acegid/nfsscratch/DATABASE/diamond/nr.dmnd
 GENOMAD_DB=/mnt/hpc_acegid/home/soumareh/haouruna/genomad_db
+NR_PATH=/mnt/hpc_acegid/nfsscratch/DATABASE/blastdb/nr/nr.faa
 SCRIPT_DIR=/mnt/hpc_acegid/home/soumareh/Metagenomics_pipeline4_V4
 
 THREADS=32
@@ -44,6 +45,7 @@ bash "${SCRIPT_DIR}/run_pipeline.sh" \
     --bowtie2_index  "${BOWTIE2_INDEX}" \
     --diamond_db     "${DIAMOND_DB}" \
     --genomad_db     "${GENOMAD_DB}" \
+    --nr_path        "${NR_PATH}" \
     --threads        "${THREADS}" \
     --min_length     "${MIN_LENGTH}" \
     --skip_existing
